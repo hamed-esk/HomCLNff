@@ -1,0 +1,103 @@
+load "UMFPACK64"
+load "Element_Mixte"
+include "HomogenizedGeometry.idp"
+plot(Th);
+
+int coil=Th( (PosCoilIn+PosCoilOut)/2,PosCoilIn/4).region;
+int lamin=Th( PosCoilIn/2,PosCoilIn/2).region;  
+int airIn=Th( PosCoilIn-RadiusCoil/2,PosCoilIn-RadiusCoil/2).region;
+int airOut=Th( 1.1*PosCoilOut,1.1*PosCoilOut).region;
+
+real [int] lambda(12);
+real RR;
+real nu0=1e7/4/pi;
+real nu1=1e4/4/pi;
+real InsRatio = 0.9;
+
+func co = 1.0*(region==coil);
+func yo = 1.0*(region==lamin);
+func ar = 1.0*(region==airIn)+1.0*(region==airOut)+1.0*(region==coil);
+func sig=4e7*co+0.1*ar; //
+func sig12=1e6*(1e-3)^2/12*yo; //+0.1*co+0.1*ar
+func nu=nu0*ar + nu1/InsRatio*yo;
+
+// ------------------------
+// Solving laplacian(u)=0
+// J = -sigma * Grad(u)
+// ------------------------
+fespace Ph(Th,P1);
+Ph u,v;
+macro Grad(u) [dx(u), dy(u)] //
+
+solve Poisson(u,v,solver=UMFPACK)
+	=int2d(Th) ( (4e7*co+0.1*yo+0.1*ar) * Grad(u)' * Grad(v))
+	+on(CoilTerminalIn, u=0)
+	+on(CoilTerminalOut, u=1);
+
+fespace Eh(Th,RT1Ortho);
+Eh [E0x,E0y] = Grad(u);
+
+// ------------------------------------------------
+// Eddy-Current Problem using modified A*
+// curl(A')*nu*Curl(A) + jw*sigma*A*A' + jw*Curl(A')*(sigma*d^2/12)*Curl(A)= sigma*E0*A'
+// ------------------------------------------------
+real freqf;
+real mmm;
+
+system("del HomogenizedFreqAnalysisResults.txt");
+ofstream gg("HomogenizedFreqAnalysisResults.txt");
+Eh<complex> [Ax,Ay], [ax,ay];
+
+for(mmm=0;mmm<=30;mmm=mmm+1){
+    freqf=10^(-1+mmm*7/30); //sweepting 1e-1 to 1e6 with logaritmic spacing
+    solve mags([Ax,Ay], [ax,ay],solver=UMFPACK,tolpivot=1e-4)
+        = int2d(Th)( nu * (dx(ay)-dy(ax)) * (dx(Ay)-dy(Ax)) 
+                    + 1i*2*pi*freqf*sig* [ax,ay]' * [Ax,Ay] 
+                    + 1i*2*pi*freqf*sig12* (dx(ay)-dy(ax)) * (dx(Ay)-dy(Ax)) )
+        -int2d(Th)( sig * [ax,ay]' * [E0x,E0y] )
+        +on(CoilTerminalIn,CoilTerminalOut, Ax=0,Ay=0)
+        +on(AirInBot,AirOutBot,AirInLeft,AirOutLeft, Ax=0,Ay=0)
+        +on(LaminLeft,LaminBot, Ax=0,Ay=0)
+        ;
+    Eh<complex> [Jx,Jy] = sig*( [E0x,E0y] - 1i*2*pi*freqf*[Ax,Ay] );
+    complex I = int1d(Th,CoilTerminalIn)(Jy);
+    cout << "freq=" << freqf << endl;
+    cout << "Re(Y)=" << real(I) << endl;
+    cout << "L=Im(1/Y)/w=" << imag(1/I)/(2*pi*freqf) << endl;
+    gg.scientific.showpos << freqf << " " << real(I) << " " << imag(1/I)/(2*pi*freqf) << endl;
+}
+
+
+/*
+freqf=0.1; //sweepting 1e-1 to 1e6 with logaritmic spacing
+solve mags([Ax,Ay], [ax,ay],solver=UMFPACK,tgv=1e30,tolpivot=1e-5)
+    = int2d(Th)( nu * (dx(ay)-dy(ax)) * (dx(Ay)-dy(Ax)) 
+                + 1i*2*pi*freqf*sig* [ax,ay]' * [Ax,Ay] 
+                + 1i*2*pi*freqf*sig12* (dx(ay)-dy(ax)) * (dx(Ay)-dy(Ax)) )
+    -int2d(Th)( sig * [ax,ay]' * [E0x,E0y] )
+    +on(CoilTerminalIn,CoilTerminalOut, Ax=0+0*1i,Ay=0+0*1i)
+    +on(AirInBot,AirOutBot,AirInLeft,AirOutLeft, Ax=0+0*1i,Ay=0+0*1i)
+    +on(LaminLeft,LaminBot, Ax=0+0*1i,Ay=0+0*1i)
+    ;
+Eh<complex> [Jx,Jy] = sig*( [E0x,E0y] - 1i*2*pi*freqf*[Ax,Ay] );
+
+// -------------------------------------
+// --------PLOTTING THE RESULTS---------
+// -------------------------------------
+system("del graph.pos");
+// macro for visualizing vectors in gmsh
+macro gmshVectorPlot(name,Mh,Vx,Vy){
+{
+  ofstream ff("graph.pos",append);
+  ff << "View \"" + name + "\" {" << endl;
+  for (int i = 0; i < Mh.nv; i++) 
+      ff << "VP(" << Mh(i).x  << "," << Mh(i).y << ", 0 "  << "){" << Vx(Mh(i).x,Mh(i).y) << "," << Vy(Mh(i).x,Mh(i).y) << ", 0 " << "};" << endl;
+  ff << "};" << endl;
+}
+} //
+
+Eh [reAx,reAy] = [real(Ax),real(Ay)];
+Eh [imAx,imAy] = [imag(Ax),imag(Ay)];
+gmshVectorPlot("reA0",Th,reAx,reAy);
+gmshVectorPlot("imA0",Th,imAx,imAy);
+*/

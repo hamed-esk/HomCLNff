@@ -1,0 +1,33 @@
+real PosCoilIn = 5e-3;
+real PosCoilOut = 6e-3;
+real RadiusCoil = 0.2e-3;
+//coil
+border CoilTerminalIn(t=0,1){x = (PosCoilOut-PosCoilIn)*(1-t) + PosCoilIn; y = 0;}
+border CoilTerminalOut(t=0,1){x = 0; y = (PosCoilOut-PosCoilIn)*t + PosCoilIn;}
+border CoilLeftPart1(t=0,1){x = PosCoilIn; y = (PosCoilIn-RadiusCoil)*t;}
+border CoilLeftPart2(t=0,pi/2){x = PosCoilIn-RadiusCoil + RadiusCoil*cos(t); y = PosCoilIn-RadiusCoil + RadiusCoil*sin(t);}
+border CoilLeftPart3(t=0,1){x = (PosCoilIn-RadiusCoil)*(1-t); y = PosCoilIn;}
+border CoilRightPart1(t=0,1){x = PosCoilOut; y = (PosCoilIn-RadiusCoil)*(1-t);}
+border CoilRightPart2(t=0,pi/2){x = PosCoilIn-RadiusCoil + (RadiusCoil+PosCoilOut-PosCoilIn)*cos(pi/2-t); y = PosCoilIn-RadiusCoil + (RadiusCoil+PosCoilOut-PosCoilIn)*sin(pi/2-t);}
+border CoilRightPart3(t=0,1){x = (PosCoilIn-RadiusCoil)*t; y = PosCoilOut;}
+//lamin
+border LaminLeft(t=0,1){x = 0; y = (PosCoilIn-RadiusCoil)*t;}
+border LaminRight(t=0,1){x = PosCoilIn-RadiusCoil; y = (PosCoilIn-RadiusCoil)*(1-t);}
+border LaminTop(t=0,1){x = (PosCoilIn-RadiusCoil)*t; y = PosCoilIn-RadiusCoil;}
+border LaminBot(t=0,1){x = (PosCoilIn-RadiusCoil)*(1-t); y = 0;}
+//air
+border AirInBot(t=0,1){x = PosCoilIn-RadiusCoil*(1-t); y = 0;}
+border AirInLeft(t=0,1){x = 0; y = PosCoilIn -RadiusCoil*t;};
+border AirOutBot(t=0,1){x = PosCoilOut+0.2*PosCoilOut*t; y = 0;}
+border AirOutRight(t=0,1){x = 1.2*PosCoilOut; y = 1.2*PosCoilOut*t;}
+border AirOutTop(t=0,1){x = 1.2*PosCoilOut*(1-t); y = 1.2*PosCoilOut;}
+border AirOutLeft(t=0,1){x = 0; y = 1.2*PosCoilOut -0.2*PosCoilOut*t;}
+
+int n=10;
+int m=6;
+mesh Th = buildmesh(CoilTerminalIn(-n) +CoilTerminalOut(-n) 
+    +CoilLeftPart1(-n*5)   +CoilLeftPart2(-n)  +CoilLeftPart3(-n*5)
+    +CoilRightPart1(-n*5)  +CoilRightPart2(-n*2) +CoilRightPart3(-n*5)
+    +LaminBot(-m*n) +LaminLeft(-m*n) +LaminRight(-m*n) +LaminTop(-m*n)
+    +AirInBot(n/2) +AirInLeft(n/2)
+    +AirOutBot(n/2)+AirOutRight(2*n)+AirOutTop(2*n)+AirOutLeft(n));

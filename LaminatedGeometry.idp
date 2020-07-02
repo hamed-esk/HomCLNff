@@ -1,0 +1,60 @@
+real PosCoilIn = 5e-3;
+real PosCoilOut = 6e-3;
+real RadiusCoil = 0.2e-3;
+real LaminDepth = (PosCoilIn-RadiusCoil)/5;
+real InsRatio = 0.9;
+//coil
+border CoilTerminalIn(t=0,1){x = (PosCoilOut-PosCoilIn)*(1-t) + PosCoilIn; y = 0;}
+border CoilTerminalOut(t=0,1){x = 0; y = (PosCoilOut-PosCoilIn)*t + PosCoilIn;}
+border CoilLeftPart1(t=0,1){x = PosCoilIn; y = (PosCoilIn-RadiusCoil)*t;}
+border CoilLeftPart2(t=0,pi/2){x = PosCoilIn-RadiusCoil + RadiusCoil*cos(t); y = PosCoilIn-RadiusCoil + RadiusCoil*sin(t);}
+border CoilLeftPart3(t=0,1){x = (PosCoilIn-RadiusCoil)*(1-t); y = PosCoilIn;}
+border CoilRightPart1(t=0,1){x = PosCoilOut; y = (PosCoilIn-RadiusCoil)*(1-t);}
+border CoilRightPart2(t=0,pi/2){x = PosCoilIn-RadiusCoil + (RadiusCoil+PosCoilOut-PosCoilIn)*cos(pi/2-t); y = PosCoilIn-RadiusCoil + (RadiusCoil+PosCoilOut-PosCoilIn)*sin(pi/2-t);}
+border CoilRightPart3(t=0,1){x = (PosCoilIn-RadiusCoil)*t; y = PosCoilOut;}
+//lamin
+border Lamin1Left(t=0,1){x = 0; y = 0*LaminDepth + LaminDepth*(1-InsRatio)/2 + LaminDepth*InsRatio*t;}
+border Lamin1Right(t=0,1){x = PosCoilIn-RadiusCoil; y = 0*LaminDepth + LaminDepth*(1-InsRatio)/2 + LaminDepth*InsRatio*(1-t);}
+border Lamin1Top(t=0,1){x = (PosCoilIn-RadiusCoil)*t; y = 0*LaminDepth + LaminDepth*(1-InsRatio)/2 + LaminDepth*InsRatio;}
+border Lamin1Bot(t=0,1){x = (PosCoilIn-RadiusCoil)*(1-t); y = 0*LaminDepth + LaminDepth*(1-InsRatio)/2;}
+border Lamin2Left(t=0,1){x = 0; y = 1*LaminDepth + LaminDepth*(1-InsRatio)/2 + LaminDepth*InsRatio*t;}
+border Lamin2Right(t=0,1){x = PosCoilIn-RadiusCoil; y = 1*LaminDepth + LaminDepth*(1-InsRatio)/2 + LaminDepth*InsRatio*(1-t);}
+border Lamin2Top(t=0,1){x = (PosCoilIn-RadiusCoil)*t; y = 1*LaminDepth + LaminDepth*(1-InsRatio)/2 + LaminDepth*InsRatio;}
+border Lamin2Bot(t=0,1){x = (PosCoilIn-RadiusCoil)*(1-t); y = 1*LaminDepth + LaminDepth*(1-InsRatio)/2;}
+border Lamin3Left(t=0,1){x = 0; y = 2*LaminDepth + LaminDepth*(1-InsRatio)/2 + LaminDepth*InsRatio*t;}
+border Lamin3Right(t=0,1){x = PosCoilIn-RadiusCoil; y = 2*LaminDepth + LaminDepth*(1-InsRatio)/2 + LaminDepth*InsRatio*(1-t);}
+border Lamin3Top(t=0,1){x = (PosCoilIn-RadiusCoil)*t; y = 2*LaminDepth + LaminDepth*(1-InsRatio)/2 + LaminDepth*InsRatio;}
+border Lamin3Bot(t=0,1){x = (PosCoilIn-RadiusCoil)*(1-t); y = 2*LaminDepth + LaminDepth*(1-InsRatio)/2;}
+border Lamin4Left(t=0,1){x = 0; y = 3*LaminDepth + LaminDepth*(1-InsRatio)/2 + LaminDepth*InsRatio*t;}
+border Lamin4Right(t=0,1){x = PosCoilIn-RadiusCoil; y = 3*LaminDepth + LaminDepth*(1-InsRatio)/2 + LaminDepth*InsRatio*(1-t);}
+border Lamin4Top(t=0,1){x = (PosCoilIn-RadiusCoil)*t; y = 3*LaminDepth + LaminDepth*(1-InsRatio)/2 + LaminDepth*InsRatio;}
+border Lamin4Bot(t=0,1){x = (PosCoilIn-RadiusCoil)*(1-t); y = 3*LaminDepth + LaminDepth*(1-InsRatio)/2;}
+border Lamin5Left(t=0,1){x = 0; y = 4*LaminDepth + LaminDepth*(1-InsRatio)/2 + LaminDepth*InsRatio*t;}
+border Lamin5Right(t=0,1){x = PosCoilIn-RadiusCoil; y = 4*LaminDepth + LaminDepth*(1-InsRatio)/2 + LaminDepth*InsRatio*(1-t);}
+border Lamin5Top(t=0,1){x = (PosCoilIn-RadiusCoil)*t; y = 4*LaminDepth + LaminDepth*(1-InsRatio)/2 + LaminDepth*InsRatio;}
+border Lamin5Bot(t=0,1){x = (PosCoilIn-RadiusCoil)*(1-t); y = 4*LaminDepth + LaminDepth*(1-InsRatio)/2;}
+//air
+border AirInBot1(t=0,1){x = PosCoilIn*t; y = 0;}
+border AirOutBot(t=0,1){x = PosCoilOut+0.2*PosCoilOut*t; y = 0;}
+border AirOutRight(t=0,1){x = 1.2*PosCoilOut; y = 1.2*PosCoilOut*t;}
+border AirOutTop(t=0,1){x = 1.2*PosCoilOut*(1-t); y = 1.2*PosCoilOut;}
+border AirOutLeft(t=0,1){x = 0; y = 1.2*PosCoilOut -0.2*PosCoilOut*t;}
+border AirInLeft1(t=0,1){x = 0; y = LaminDepth*(1-InsRatio)/2*(1-t);};
+border AirInLeft2(t=0,1){x = 0; y = 1*LaminDepth + LaminDepth*(1-InsRatio)*(0.5-t);};
+border AirInLeft3(t=0,1){x = 0; y = 2*LaminDepth + LaminDepth*(1-InsRatio)*(0.5-t);};
+border AirInLeft4(t=0,1){x = 0; y = 3*LaminDepth + LaminDepth*(1-InsRatio)*(0.5-t);};
+border AirInLeft5(t=0,1){x = 0; y = 4*LaminDepth + LaminDepth*(1-InsRatio)*(0.5-t);};
+border AirInLeft6(t=0,1){x = 0; y = PosCoilIn -(LaminDepth*(1-InsRatio)/2 + RadiusCoil)*(t);};
+
+int n=15;
+int m=6;
+mesh Th = buildmesh(CoilTerminalIn(-n) +CoilTerminalOut(-n) 
+    +CoilLeftPart1(-n*5)   +CoilLeftPart2(-n*2)  +CoilLeftPart3(-n*5)
+    +CoilRightPart1(-n*5)  +CoilRightPart2(-n*3) +CoilRightPart3(-n*5)
+    +Lamin1Bot(-m*n) +Lamin1Left(-m/5*n) +Lamin1Right(-m/5*n) +Lamin1Top(-m*n)
+    +Lamin2Bot(-m*n) +Lamin2Left(-m/5*n) +Lamin2Right(-m/5*n) +Lamin2Top(-m*n)
+    +Lamin3Bot(-m*n) +Lamin3Left(-m/5*n) +Lamin3Right(-m/5*n) +Lamin3Top(-m*n)
+    +Lamin4Bot(-m*n) +Lamin4Left(-m/5*n) +Lamin4Right(-m/5*n) +Lamin4Top(-m*n)
+    +Lamin5Bot(-m*n) +Lamin5Left(-m/5*n) +Lamin5Right(-m/5*n) +Lamin5Top(-m*n)
+    +AirInBot1(2*m*n) +AirInLeft1(n) +AirInLeft2(n) +AirInLeft3(n) +AirInLeft4(n) +AirInLeft5(n) +AirInLeft6(n)
+    +AirOutBot(n)+AirOutRight(n)+AirOutTop(n)+AirOutLeft(n));
