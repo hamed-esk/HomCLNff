@@ -1,0 +1,25 @@
+// -------------------------------------
+// --------PLOTTING THE RESULTS---------
+// -------------------------------------
+system("del graph.pos");
+// macro for visualizing vectors in gmsh
+macro gmshVectorPlot(name,Mh,Vx,Vy){
+{
+  ofstream ff("graph.pos",append);
+  ff << "View \"" + name + "\" {" << endl;
+  for (int i = 0; i < Mh.nv; i++) 
+      ff << "VP(" << Mh(i).x  << "," << Mh(i).y << ", 0 "  << "){" << Vx(Mh(i).x,Mh(i).y) << "," << Vy(Mh(i).x,Mh(i).y) << ", 0 " << "};" << endl;
+  ff << "};" << endl;
+}
+} //
+
+// macro for visualizing scalars in gmsh
+macro gmshScalarPlot(name,Mh,S){
+{
+  ofstream ff("graph.pos",append);
+  ff << "View \"" + name + "\" {" << endl;
+  for (int i = 0; i < Mh.nv; i++) 
+      ff << "VP(" << Mh(i).x  << "," << Mh(i).y << ", 0 "  << "){0,0," << S(Mh(i).x,Mh(i).y) << "};" << endl;
+  ff << "};" << endl;
+}
+} //

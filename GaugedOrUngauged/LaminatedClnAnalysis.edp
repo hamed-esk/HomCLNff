@@ -1,0 +1,173 @@
+load "UMFPACK64"
+include "../LaminatedGeometry.idp"
+include "../PlotInGMSH.idp"
+
+int coil=Th( (PosCoilIn+PosCoilOut)/2,PosCoilIn/4).region;
+int lamin1=Th( PosCoilIn/2,1*LaminDepth/2).region;  
+int lamin2=Th( PosCoilIn/2,3*LaminDepth/2).region;  
+int lamin3=Th( PosCoilIn/2,5*LaminDepth/2).region;  
+int lamin4=Th( PosCoilIn/2,7*LaminDepth/2).region;  
+int lamin5=Th( PosCoilIn/2,9*LaminDepth/2).region;  
+int airIn=Th( PosCoilIn-RadiusCoil/2,PosCoilIn-RadiusCoil/2).region;
+int airOut=Th( 1.1*PosCoilOut,1.1*PosCoilOut).region;
+
+real [int] lambda(22);
+real RR;
+real nu0=1e7/4/pi;
+real nu1=1e4/4/pi;
+
+func co = 1.0*(region==coil);
+func yo = 1.0*(region==lamin1) +1.0*(region==lamin2) +1.0*(region==lamin3)
+         +1.0*(region==lamin4) +1.0*(region==lamin5);
+func ar = 1.0*(region==airIn)+1.0*(region==airOut)+1.0*(region==coil);
+func sig=1e6*yo+4e7*co+0.1*ar;
+func nu=nu0*ar + nu1*yo;
+
+//plot(Th);
+
+// --------------------------------
+// Solving laplacian(phi)=0
+// --------------------------------
+fespace Ph(Th,P1);
+Ph u,v;
+macro Grad(u) [dx(u), dy(u)] //
+
+solve Poisson(u,v, solver=UMFPACK)
+	=int2d(Th) (sig * Grad(u)' * Grad(v))
+	+on(CoilTerminalIn, u=1)
+	+on(CoilTerminalOut, u=0);
+
+fespace Eh(Th,RT0Ortho);
+Eh [Esx, Esy];
+Eh [E0x,E0y] = Grad(u);
+
+varf poi(XX,YY)
+	=int2d(Th) (sig * Grad(XX)' * Grad(YY))
+	+on(CoilTerminalIn, XX=1)
+	+on(CoilTerminalOut, XX=0)
+	;
+matrix poiA = poi(Ph,Ph,tgv=1e30,solver=CG);
+real[int] poiB = poi(0 ,Ph);
+Ph ja = poiA^-1*poiB;
+
+// ------------------------------
+// defining magnetostatic problem
+// curl(A')*nu*Curl(A)=R*Crul(A')*T
+// ------------------------------
+fespace Xh(Th,[RT0Ortho,P1]);
+Xh [Ax,Ay,p], [ax,ay,q];
+problem mags([Ax,Ay,p], [ax,ay,q], solver=UMFPACK)
+	= int2d(Th)( nu * (dx(ay)-dy(ax)) * (dx(Ay)-dy(Ax)) 
+                + Grad(p)' * [ax,ay] + Grad(q)' * [Ax,Ay] )
+	 -int2d(Th)( RR * sig * [ax,ay]' * [Esx,Esy] )
+	 +on(CoilTerminalIn,CoilTerminalOut, Ax=0,Ay=0,p=0)
+	 +on(AirInBot1,AirOutBot,AirOutLeft, Ax=0,Ay=0,p=0)
+	 +on(Lamin1Left,Lamin2Left,Lamin3Left,Lamin4Left,Lamin5Left, Ax=0,Ay=0,p=0)
+	 +on(AirInLeft1,AirInLeft2,AirInLeft3,AirInLeft4,AirInLeft5,AirInLeft6, Ax=0,Ay=0,p=0)
+	 ;
+
+// --------------------------------
+// defining electrokinetic equation
+// div( sig * (A+Grad(phi)) ) = 0
+// --------------------------------
+Ph pp,qq;
+problem elek(pp, qq, solver=UMFPACK)
+		=int2d(Th)(sig * Grad(qq)' * Grad(pp))
+		-int2d(Th)(sig * Grad(qq)' * [Esx,Esy] )
+		+on(Lamin1Left,Lamin2Left,Lamin3Left,Lamin4Left,Lamin5Left,pp=0)
+		+on(CoilTerminalIn,CoilTerminalOut,pp=0)
+		;
+
+system("del LaminatedLamda.txt");
+ofstream gg("LaminatedLamda.txt",append);
+
+Eh[int] [Enx,Eny](5);
+Eh[int] [Anx,Any](5);
+[Enx[0],Eny[0]] = Grad(u);
+for (int stage=0; stage<3; stage++)
+{
+	[Esx,Esy] = [Enx[stage],Eny[stage]];
+	lambda[2*stage] = 1./int2d(Th)(sig  * [Esx, Esy]' * [Esx, Esy]);
+	gg.scientific << lambda[2*stage] << endl;
+	cout <<"R"<< 2*stage <<" = "<< lambda[2*stage] << endl;
+	RR = lambda[2*stage];
+	mags;
+	if (stage==0){
+		[Anx[0],Any[0]] = [Ax,Ay];
+	}
+	else{
+		[Anx[stage],Any[stage]] = [Anx[stage-1]+Ax,Any[stage-1]+Ay];
+	}
+	lambda[2*stage+1] = int2d(Th)(nu * (dx(Any[stage])-dy(Anx[stage])) * (dx(Any[stage])-dy(Anx[stage])));
+	gg.scientific << lambda[2*stage+1] << endl;
+	cout <<"L" << 2*stage+1 <<" = "<< lambda[2*stage+1] << endl;
+	[Esx,Esy] = [Anx[stage]/lambda[2*stage+1],Any[stage]/lambda[2*stage+1]];
+	elek;
+	[Enx[stage+1], Eny[stage+1]] = [Enx[stage], Eny[stage]] - [Anx[stage]/lambda[2*stage+1], Any[stage]/lambda[2*stage+1]] + Grad(pp);
+}
+
+
+// -------------------------------------
+// --------PLOTTING THE RESULTS---------
+// -------------------------------------
+system("del graph.pos");
+
+for (int stage=0; stage<3; stage++)
+{
+	Eh [J0x,J0y] = sig*[Enx[stage], Eny[stage]];
+	gmshVectorPlot("J"+2*stage,Th,J0x,J0y);
+}
+/*
+Eh [J2x,J2y] = yo*sig*[E2x, E2y];
+Eh [J4x,J4y] = yo*sig*[E4x, E4y];
+Eh [J6x,J6y] = yo*sig*[E6x, E6y];
+Eh [J8x,J8y] = yo*sig*[E8x, E8y];
+Eh [J10x,J10y] = yo*sig*[E10x, E10y];
+Ph B1 = dx(A1y)-dy(A1x);
+Ph B3 = dx(A3y)-dy(A3x);
+Ph B5 = dx(A5y)-dy(A5x);
+Ph B7 = dx(A7y)-dy(A7x);
+Ph B9 = dx(A9y)-dy(A9x);
+gmshVectorPlot("J2",Th,J2x,J2y);
+gmshVectorPlot("J4",Th,J4x,J4y);
+gmshVectorPlot("J6",Th,J6x,J6y);
+gmshVectorPlot("J8",Th,J8x,J8y);
+gmshVectorPlot("J10",Th,J10x,J10y);
+gmshVectorPlot("A1",Th,A1x,A1y);
+gmshVectorPlot("A3",Th,A3x,A3y);
+gmshVectorPlot("A5",Th,A5x,A5y);
+gmshScalarPlot("B1",Th,B1);
+gmshScalarPlot("B3",Th,B3);
+gmshScalarPlot("B5",Th,B5);
+gmshScalarPlot("B7",Th,B7);
+gmshScalarPlot("B9",Th,B9);
+*/
+
+
+
+
+
+/*
+// macro for visualizing vectors in gmsh
+macro gmshVectorPlot(name,Mh,Vx,Vy){
+{
+  ofstream ff("graph.pos",append);
+  ff << "View \"" + name + "\" {" << endl;
+  for (int i = 0; i < Mh.nv; i++) 
+      ff << "VP(" << Mh(i).x  << "," << Mh(i).y << ", 0 "  << "){" << Vx(Mh(i).x,Mh(i).y) << "," << Vy(Mh(i).x,Mh(i).y) << ", 0 " << "};" << endl;
+  ff << "};" << endl;
+}
+} //
+
+// macro for visualizing scalars in gmsh
+macro gmshScalarPlot(name,Mh,S){
+{
+  ofstream ff("graph.pos",append);
+  ff << "View \"" + name + "\" {" << endl;
+  for (int i = 0; i < Mh.nv; i++) 
+      ff << "VP(" << Mh(i).x  << "," << Mh(i).y << ", 0 "  << "){0,0," << S(Mh(i).x,Mh(i).y) << "};" << endl;
+  ff << "};" << endl;
+}
+} //
+*/
+
