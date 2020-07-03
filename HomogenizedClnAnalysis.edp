@@ -38,21 +38,10 @@ fespace Ph(Th,P1);
 Ph u,v;
 macro Grad(u) [dx(u), dy(u)] //
 
-solve Poisson(u,v, solver=UMFPACK)
-	=int2d(Th) (sig * Grad(u)' * Grad(v))
+solve Poisson(u,v, solver=CG)
+	=int2d(Th) ( 4e7*co * Grad(u)' * Grad(v))
 	+on(CoilTerminalIn, u=1)
 	+on(CoilTerminalOut, u=0);
-
-// Question 1
-// the above equation is only solved when
-// sig = 4e7*co + 0.1*yo + 0.1*ar;
-// solver = UMFPACK;
-// or when
-// sig = 4e7*co
-// solver = CG
-//
-// how can I undrestand which solver is appropriate?
-// how can I undrestand the problem is not about the solver but my weak form?
 
 fespace Eh(Th,RT0Ortho);
 Eh [E0x,E0y] = Grad(u);
@@ -61,8 +50,8 @@ Eh [Esx, Esy];
 
 // ------------------------------
 // In the CLN procedure, at each step there is a magnetostatic equation
-// required to be solved. Here I use the gagaued equations with lagrange multiplier
-// equation 13 and 14 of Kanayama's paper:
+// required to be solved. Here I use the ungagaued equation.
+// the
 // weak form:
 // curl(A) nu Curl(A') + grad(p)*A'=Rcln * (A' * sig * E2n  + curl(A') * sig12 * Curl(E2n) )
 // A * grad(q) = 0
@@ -86,7 +75,7 @@ Xh [Ax,Ay,p], [ax,ay,q];
 
 problem mags([Ax,Ay,p], [ax,ay,q], solver=UMFPACK)
 	=int2d(Th)( nu * Curl(ax,ay) * Curl(Ax,Ay) 
-                + Grad(p)' * [ax,ay] + Grad(q)' * [Ax,Ay] )
+                + co * Grad(p)' * [ax,ay] + co * Grad(q)' * [Ax,Ay] )
 	-int2d(Th)( RR * sig * [ax,ay]' * [Esx,Esy] )
   -int2d(Th)( RR * siglam * Curl(ax,ay) * Curl(Esx,Esy) )
 	+on(CoilTerminalIn,CoilTerminalOut, Ax=0,Ay=0,p=0)
