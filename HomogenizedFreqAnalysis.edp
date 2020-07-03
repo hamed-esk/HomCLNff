@@ -1,7 +1,7 @@
 load "UMFPACK64"
 load "Element_Mixte"
 include "HomogenizedGeometry.idp"
-plot(Th);
+//plot(Th);
 
 int coil=Th( (PosCoilIn+PosCoilOut)/2,PosCoilIn/4).region;
 int lamin=Th( PosCoilIn/2,PosCoilIn/2).region;  

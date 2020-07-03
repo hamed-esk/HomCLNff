@@ -19,7 +19,7 @@ func sig=4e7*co+0.1*yo+0.1*ar;
 func siglam=1e6*(1e-3)^2/12*yo;
 func nu=nu0*ar + nu1/InsRatio*yo;
 
-plot(Th);
+//plot(Th);
 
 // --------------------------------
 // First we need to calculate the E0 and J0
@@ -75,7 +75,7 @@ Xh [Ax,Ay,p], [ax,ay,q];
 
 problem mags([Ax,Ay,p], [ax,ay,q], solver=UMFPACK)
 	=int2d(Th)( nu * Curl(ax,ay) * Curl(Ax,Ay) 
-                + co * Grad(p)' * [ax,ay] + co * Grad(q)' * [Ax,Ay] )
+                + Grad(p)' * [ax,ay] + Grad(q)' * [Ax,Ay] )
 	-int2d(Th)( RR * sig * [ax,ay]' * [Esx,Esy] )
   -int2d(Th)( RR * siglam * Curl(ax,ay) * Curl(Esx,Esy) )
 	+on(CoilTerminalIn,CoilTerminalOut, Ax=0,Ay=0,p=0)
