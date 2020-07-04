@@ -11,7 +11,8 @@ int lamin5=Th( PosCoilIn/2,9*LaminDepth/2).region;
 int airIn=Th( PosCoilIn-RadiusCoil/2,PosCoilIn-RadiusCoil/2).region;
 int airOut=Th( 1.1*PosCoilOut,1.1*PosCoilOut).region;
 
-real [int] lambda(22);
+int numStages = 5;
+real [int] lambda(2*numStages+1);
 real RR;
 real nu0=1e7/4/pi;
 real nu1=1e4/4/pi;
@@ -20,7 +21,7 @@ func co = 1.0*(region==coil);
 func yo = 1.0*(region==lamin1) +1.0*(region==lamin2) +1.0*(region==lamin3)
          +1.0*(region==lamin4) +1.0*(region==lamin5);
 func ar = 1.0*(region==airIn)+1.0*(region==airOut)+1.0*(region==coil);
-func sig=1e6*yo+4e7*co+0.1*ar;
+func sig=1e6*yo+4e7*co;
 func nu=nu0*ar + nu1*yo;
 
 //plot(Th);
@@ -32,23 +33,14 @@ fespace Ph(Th,P1);
 Ph u,v;
 macro Grad(u) [dx(u), dy(u)] //
 
-solve Poisson(u,v, solver=UMFPACK)
-	=int2d(Th) (sig * Grad(u)' * Grad(v))
+solve Poisson(u,v, solver=CG)
+	=int2d(Th) ( 4e7*co * Grad(u)' * Grad(v))
 	+on(CoilTerminalIn, u=1)
 	+on(CoilTerminalOut, u=0);
 
 fespace Eh(Th,RT0Ortho);
 Eh [Esx, Esy];
 Eh [E0x,E0y] = Grad(u);
-
-/*varf poi(XX,YY)
-	=int2d(Th) (sig * Grad(XX)' * Grad(YY))
-	+on(CoilTerminalIn, XX=1)
-	+on(CoilTerminalOut, XX=0)
-	;
-matrix poiA = poi(Ph,Ph,tgv=1e30,solver=CG);
-real[int] poiB = poi(0 ,Ph);
-Ph ja = poiA^-1*poiB;*/
 
 // ------------------------------
 // defining magnetostatic problem
@@ -72,21 +64,21 @@ matrix<real> Kmags = mags(Xh,Xh,tgv=1e30,solver=UMFPACK);
 // div( sig * (A+Grad(phi)) ) = 0
 // --------------------------------
 Ph pp;
-varf elek(pp, qq, solver=UMFPACK)
-		=int2d(Th)(sig * Grad(qq)' * Grad(pp))
-		-int2d(Th)(sig * Grad(qq)' * [Esx,Esy] )
+varf elek(pp, qq)
+		=int2d(Th)( sig * Grad(qq)' * Grad(pp))
+		-int2d(Th)( sig * Grad(qq)' * [Esx,Esy] )
 		+on(Lamin1Left,Lamin2Left,Lamin3Left,Lamin4Left,Lamin5Left,pp=0)
 		+on(CoilTerminalIn,CoilTerminalOut,pp=0)
 		;
-matrix<real> Kelek = elek(Ph,Ph,tgv=1e30,solver=UMFPACK);
+matrix<real> Kelek = elek(Ph,Ph,solver=CG,eps=1e-20);
 
 system("del LaminatedLamda.txt");
 ofstream gg("LaminatedLamda.txt",append);
 
-Eh[int] [Enx,Eny](5);
-Eh[int] [Anx,Any](5);
+Eh[int] [Enx,Eny](numStages+1);
+Eh[int] [Anx,Any](numStages);
 [Enx[0],Eny[0]] = Grad(u);
-for (int stage=0; stage<3; stage++)
+for (int stage=0; stage<numStages; stage++)
 {
 	[Esx,Esy] = [Enx[stage],Eny[stage]];
 	lambda[2*stage] = 1./int2d(Th)(sig  * [Esx, Esy]' * [Esx, Esy]);
@@ -117,11 +109,10 @@ for (int stage=0; stage<3; stage++)
 // --------PLOTTING THE RESULTS---------
 // -------------------------------------
 system("del graph.pos");
-/*
-for (int stage=0; stage<3; stage++)
+
+for (int stage=0; stage<numStages; stage++)
 {
 	Eh [J0x,J0y] = sig*[Enx[stage], Eny[stage]];
 	gmshVectorPlot("J"+2*stage,Th,J0x,J0y);
 	gmshVectorPlot("A"+(2*stage+1),Th,Anx[stage],Any[stage]);
 }
-*/

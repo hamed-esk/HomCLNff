@@ -49,8 +49,8 @@ border AirInLeft6(t=0,1){x = 0; y = PosCoilIn -(LaminDepth*(1-InsRatio)/2 + Radi
 int n=15;
 int m=6;
 mesh Th = buildmesh(CoilTerminalIn(-n) +CoilTerminalOut(-n) 
-    +CoilLeftPart1(-n*5)   +CoilLeftPart2(-n*2)  +CoilLeftPart3(-n*5)
-    +CoilRightPart1(-n*5)  +CoilRightPart2(-n*3) +CoilRightPart3(-n*5)
+    +CoilLeftPart1(-n*5)   +CoilLeftPart2(-n)  +CoilLeftPart3(-n*5)
+    +CoilRightPart1(-n*5)  +CoilRightPart2(-n*2) +CoilRightPart3(-n*5)
     +Lamin1Bot(-m*n) +Lamin1Left(-m/5*n) +Lamin1Right(-m/5*n) +Lamin1Top(-m*n)
     +Lamin2Bot(-m*n) +Lamin2Left(-m/5*n) +Lamin2Right(-m/5*n) +Lamin2Top(-m*n)
     +Lamin3Bot(-m*n) +Lamin3Left(-m/5*n) +Lamin3Right(-m/5*n) +Lamin3Top(-m*n)
