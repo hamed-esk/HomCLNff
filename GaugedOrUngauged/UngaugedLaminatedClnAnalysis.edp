@@ -42,22 +42,30 @@ fespace Eh(Th,RT0Ortho);
 Eh [Esx, Esy];
 Eh [E0x,E0y] = Grad(u);
 
+
+// --------------------------------
+// defining RHS4 method:  curl(T')*curl(T)=curl(T')*J0
+// --------------------------------
+macro Curl(Ax, Ay, Az) [dy(Az)-dz(Ay), dz(Ax)-dx(Az), dx(Ay)-dy(Ax)] //
+varf rhs4(Tz, tz)
+	= int2d(Th)( [dy(tz),-dx(tz)]' * [dy(Tz),-dx(Tz)])
+	 -int2d(Th)( sig * [dy(tz),-dx(tz)]' * [Esx, Esy] )
+	 +on(AirOutTop,AirOutRight,Tz=0);
+matrix<real> Krhs4=rhs4(Ph,Ph,tgv=1e30,solver=CG,eps=1e-10);
 // ------------------------------
 // defining magnetostatic problem
 // curl(A')*nu*Curl(A)=R*Crul(A')*T
 // ------------------------------
-fespace Xh(Th,[RT0Ortho,P1]);
-Xh [Ax,Ay,p], [ax,ay,q];
-varf mags([Ax,Ay,p], [ax,ay,q])
-	= int2d(Th)( nu * (dx(ay)-dy(ax)) * (dx(Ay)-dy(Ax)) 
-                + Grad(p)' * [ax,ay] + Grad(q)' * [Ax,Ay] )
-	 -int2d(Th)( RR * sig * [ax,ay]' * [Esx,Esy] )
-	 +on(CoilTerminalIn,CoilTerminalOut, Ax=0,Ay=0,p=0)
-	 +on(AirInBot1,AirOutBot,AirOutLeft, Ax=0,Ay=0,p=0)
-	 +on(Lamin1Left,Lamin2Left,Lamin3Left,Lamin4Left,Lamin5Left, Ax=0,Ay=0,p=0)
-	 +on(AirInLeft1,AirInLeft2,AirInLeft3,AirInLeft4,AirInLeft5,AirInLeft6, Ax=0,Ay=0,p=0)
+Ph Tz;
+varf mags([Ax,Ay], [ax,ay])
+	= int2d(Th)( nu * (dx(ay)-dy(ax)) * (dx(Ay)-dy(Ax)) )
+	 -int2d(Th)( RR * (dx(ay)-dy(ax)) * Tz )
+	 +on(CoilTerminalIn,CoilTerminalOut, Ax=0,Ay=0)
+	 +on(AirInBot1,AirOutBot,AirOutLeft, Ax=0,Ay=0)
+	 +on(Lamin1Left,Lamin2Left,Lamin3Left,Lamin4Left,Lamin5Left, Ax=0,Ay=0)
+	 +on(AirInLeft1,AirInLeft2,AirInLeft3,AirInLeft4,AirInLeft5,AirInLeft6, Ax=0,Ay=0)
 	 ;
-matrix<real> Kmags = mags(Xh,Xh,tgv=1e30,solver=UMFPACK);
+matrix<real> Kmags = mags(Eh,Eh,tgv=1e30,solver=CG);
 
 // --------------------------------
 // defining electrokinetic equation
@@ -70,14 +78,23 @@ varf elek(pp, qq)
 		+on(Lamin1Left,Lamin2Left,Lamin3Left,Lamin4Left,Lamin5Left,pp=0)
 		+on(CoilTerminalIn,CoilTerminalOut,pp=0)
 		;
-matrix<real> Kelek = elek(Ph,Ph,solver=CG,eps=1e-20);
+matrix<real> Kelek = elek(Ph,Ph,solver=CG,eps=1e-10);
 
 system("del LaminatedLamda.txt");
 ofstream gg("LaminatedLamda.txt",append);
 
+Eh [Ax,Ay];
 Eh[int] [Enx,Eny](numStages+1);
 Eh[int] [Anx,Any](numStages);
 [Enx[0],Eny[0]] = Grad(u);
+
+real[int] Frhs4(Ph.ndof);
+real[int] ansRhs4(Ph.ndof);
+real[int] Fmags(Eh.ndof);
+real[int] ansMags(Eh.ndof);
+real[int] Felek(Ph.ndof);
+real[int] ansElek(Ph.ndof);
+
 for (int stage=0; stage<numStages; stage++)
 {
 	[Esx,Esy] = [Enx[stage],Eny[stage]];
@@ -85,8 +102,11 @@ for (int stage=0; stage<numStages; stage++)
 	gg.scientific << lambda[2*stage] << endl;
 	cout <<"R"<< 2*stage <<" = "<< lambda[2*stage] << endl;
 	RR = lambda[2*stage];
-	real[int] Fmags = mags(0,Xh);
-	real[int] ansMags = Kmags^-1*Fmags;
+	Frhs4 = rhs4(0,Ph);
+	ansRhs4 = Krhs4^-1*Frhs4;
+	Tz[] = -ansRhs4;
+	Fmags = mags(0,Eh);
+	ansMags = Kmags^-1*Fmags;
 	Ax[] = -ansMags;
 	if (stage==0){
 		[Anx[0],Any[0]] = [Ax,Ay];
@@ -98,8 +118,8 @@ for (int stage=0; stage<numStages; stage++)
 	gg.scientific << lambda[2*stage+1] << endl;
 	cout <<"L" << 2*stage+1 <<" = "<< lambda[2*stage+1] << endl;
 	[Esx,Esy] = [Anx[stage]/lambda[2*stage+1],Any[stage]/lambda[2*stage+1]];
-	real[int] Felek = elek(0,Ph);
-	real[int] ansElek = Kelek^-1*Felek;
+	Felek = elek(0,Ph);
+	ansElek = Kelek^-1*Felek;
 	pp[] = -ansElek;
 	[Enx[stage+1], Eny[stage+1]] = [Enx[stage], Eny[stage]] - [Anx[stage]/lambda[2*stage+1], Any[stage]/lambda[2*stage+1]] + Grad(pp);
 }
@@ -108,6 +128,7 @@ for (int stage=0; stage<numStages; stage++)
 // -------------------------------------
 // --------PLOTTING THE RESULTS---------
 // -------------------------------------
+/*
 system("del graph.pos");
 
 for (int stage=0; stage<numStages; stage++)
@@ -116,3 +137,4 @@ for (int stage=0; stage<numStages; stage++)
 	gmshVectorPlot("J"+2*stage,Th,J0x,J0y);
 	gmshVectorPlot("A"+(2*stage+1),Th,Anx[stage],Any[stage]);
 }
+*/
