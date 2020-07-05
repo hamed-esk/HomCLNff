@@ -1,0 +1,110 @@
+load "UMFPACK64"
+include "../HomogenizedGeometry.idp"
+include "../PlotInGMSH.idp"
+
+//plot(Th);
+
+int coil=Th( (PosCoilIn+PosCoilOut)/2,PosCoilIn/4).region;
+int lamin=Th( PosCoilIn/2,PosCoilIn/2).region;  
+int airIn=Th( PosCoilIn-RadiusCoil/2,PosCoilIn-RadiusCoil/2).region;
+int airOut=Th( 1.1*PosCoilOut,1.1*PosCoilOut).region;
+
+real [int] lambda(12);
+real RR;
+real nu0=1e7/4/pi;
+real nu1=1e4/4/pi;
+real InsRatio = 0.9;
+
+func co = 1.0*(region==coil);
+func yo = 1.0*(region==lamin);
+func ar = 1.0*(region==airIn)+1.0*(region==airOut)+1.0*(region==coil);
+func sig=4e7*co+0.1*ar; //
+func sigLam=1e6*(1e-3)^2/12*yo+1e-1*ar;
+func nu=nu0*ar + nu1/InsRatio*yo;
+
+// ------------------------
+// Solving laplacian(u)=0
+// J = -sigma * Grad(u)
+// ------------------------
+fespace Ph(Th,P1);
+Ph u,v;
+macro Grad(u) [dx(u), dy(u)] //
+
+solve Poisson(u,v,solver=CG)
+	=int2d(Th) ( 4e7*co * Grad(u)' * Grad(v))
+	+on(CoilTerminalIn, u=0)
+	+on(CoilTerminalOut, u=1);
+
+fespace Eh(Th,RT0Ortho);
+Eh [E0x,E0y] = Grad(u);
+
+real freqf;
+real mmm;
+system("del SecondOrderHomogenizedFreqAnalysisResults.txt");
+ofstream gg("SecondOrderHomogenizedFreqAnalysisResults.txt");
+
+macro Curl(u,v) [dx(v)-dy(u)] //
+
+fespace Xh(Th,[RT0Ortho,RT0Ortho]);
+Xh<complex> [A0x,A0y,A2x,A2y];
+Xh<complex> [a0x,a0y,a2x,a2y];
+
+freqf=0.1;
+solve fana([A0x,A0y,A2x,A2y],[a0x,a0y,a2x,a2y], tgv=1e30, solver=UMFPACK)
+        =int2d(Th) (nu*Curl(A0x,A0y) * Curl(a0x,a0y)
+                +0.2*nu * Curl(A2x,A2y) * Curl(a2x,a2y)
+                +1i*2*pi*freqf* sig * [A0x,A0y]' * [a0x,a0y]
+                +1i*2*pi*freqf* 1/12 * sigLam * Curl(A0x,A0y) * Curl(a0x,a0y)
+                -1i*2*pi*freqf* 1/60 * sigLam * Curl(A0x,A0y) * Curl(a2x,a2y)
+                -1i*2*pi*freqf* 1/60 * sigLam * Curl(A2x,A2y) * Curl(a0x,a0y)
+                +1i*2*pi*freqf* 1/210* sigLam * Curl(A2x,A2y) * Curl(a2x,a2y)
+                )
+        -int2d(Th) ( 4e7*co * [a0x,a0y]' * [E0x,E0y] )
+        +on(CoilTerminalIn,CoilTerminalOut, A0x=0,A0y=0,A2x=0,A2y=0)
+        +on(AirInBot,AirOutBot,AirInLeft,AirOutLeft, A0x=0,A0y=0,A2x=0,A2y=0)
+        +on(LaminLeft,LaminBot, A0x=0,A0y=0,A2x=0,A2y=0)
+;
+
+
+system("del graph.pos");
+Eh [reA0x,reA0y] = [sig*real(A0x),sig*real(A0y)];
+Eh [imA0x,imA0y] = [sig*imag(A0x),sig*imag(A0y)];
+gmshVectorPlot("reA00",Th,reA0x,reA0y);
+gmshVectorPlot("imA00",Th,imA0x,imA0y);
+
+Eh [reA2x,reA2y] = [real(A2x),real(A2y)];
+Ph reA2 = Curl(reA2x,reA2y);
+Eh [imA2x,imA2y] = [imag(A2x),imag(A2y)];
+Ph imA2 = Curl(imA2x,imA2y);
+gmshVectorPlot("reA20",Th,reA2x,reA2y);
+gmshVectorPlot("imA20",Th,imA2x,imA2y);
+gmshScalarPlot("reA2",Th,reA2);
+gmshScalarPlot("imA2",Th,imA2);
+
+
+/*
+for(mmm=0;mmm<=50;mmm=mmm+1){
+    freqf=10^(-1+mmm*7/50); //sweepting 1e-1 to 1e6 with logaritmic spacing
+    solve fana([A0x,A0y,A2x,A2y],[a0x,a0y,a2x,a2y], solver=UMFPACK)
+        =int2d(Th) (nu*Curl(A0x,A0y) * Curl(a0x,a0y)
+                   +nu/5 * Curl(A2x,A2y) * Curl(a2x,a2y)
+                   +1i*2*pi*freqf*sig * [A0x,A0y]' * [a0x,a0y]
+                   +1i*2*pi*freqf*sig*(LaminThickness^2)/12 * Curl(A0x,A0y) * Curl(a0x,a0y)
+                   -1i*2*pi*freqf*sig*(LaminThickness^2)/60 * Curl(A0x,A0y) * Curl(a2x,a2y)
+                   -1i*2*pi*freqf*sig*(LaminThickness^2)/60 * Curl(A2x,A2y) * Curl(a0x,a0y)
+                   +1i*2*pi*freqf*sig*(LaminThickness^2)/210* Curl(A2x,A2y) * Curl(a2x,a2y)
+                   )
+        -int2d(Th) ( sig * [a0x,a0y]' * [E0x,E0y] )
+        +on(CoilTerminalIn,CoilTerminalOut, A0x=0,A0y=0,A2x=0,A2y=0)
+        +on(AirInBot,AirOutBot,AirInLeft,AirOutLeft, A0x=0,A0y=0,A2x=0,A2y=0)
+        +on(LaminLeft,LaminBot, A0x=0,A0y=0,A2x=0,A2y=0)
+        ;
+    
+    Eh<complex> [Jx,Jy] = sig*( [E0x,E0y] - 1i*2*pi*freqf*[A0x,A0y] - 1i*2*pi*freqf*[A2x,A2y] );
+    complex I = int1d(Th,CoilTerminalIn)(Jy);
+    cout << "freq=" << freqf << endl;
+    cout << "Re(Y)=" << real(I) << endl;
+    cout << "L=Im(1/Y)/w=" << imag(1/I)/(2*pi*freqf) << endl;
+    gg.scientific.showpos << freqf << " " << real(I) << " " << imag(1/I)/(2*pi*freqf) << endl;
+}
+*/

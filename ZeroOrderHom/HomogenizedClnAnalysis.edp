@@ -94,7 +94,7 @@ problem elek(pp, qq, solver=UMFPACK)
 		=int2d(Th)((sig+siglam) * Grad(qq)' * Grad(pp))
 		-int2d(Th)((sig+siglam) * Grad(qq)' * [Esx,Esy] )
 		+on(LaminLeft,LaminBot,pp=0)
-        +on(AirInBot,AirOutBot,AirInLeft,AirOutLeft, pp=0)
+    +on(AirInBot,AirOutBot,AirInLeft,AirOutLeft, pp=0)
 		+on(CoilTerminalIn,CoilTerminalOut,pp=0)
 		;
 // question 3

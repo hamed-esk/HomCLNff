@@ -1,6 +1,6 @@
 load "UMFPACK64"
 load "Element_Mixte"
-include "HomogenizedGeometry.idp"
+include "../HomogenizedGeometry.idp"
 //plot(Th);
 
 int coil=Th( (PosCoilIn+PosCoilOut)/2,PosCoilIn/4).region;
@@ -18,7 +18,7 @@ func co = 1.0*(region==coil);
 func yo = 1.0*(region==lamin);
 func ar = 1.0*(region==airIn)+1.0*(region==airOut)+1.0*(region==coil);
 func sig=4e7*co+0.1*ar; //
-func sig12=1e6*(1e-3)^2/12*yo; //+0.1*co+0.1*ar
+func sigLam=1e6*(1e-3)^2/12*yo; //+0.1*co+0.1*ar
 func nu=nu0*ar + nu1/InsRatio*yo;
 
 // ------------------------
@@ -53,7 +53,7 @@ for(mmm=0;mmm<=30;mmm=mmm+1){
     solve mags([Ax,Ay], [ax,ay],solver=UMFPACK,tolpivot=1e-4)
         = int2d(Th)( nu * (dx(ay)-dy(ax)) * (dx(Ay)-dy(Ax)) 
                     + 1i*2*pi*freqf*sig* [ax,ay]' * [Ax,Ay] 
-                    + 1i*2*pi*freqf*sig12* (dx(ay)-dy(ax)) * (dx(Ay)-dy(Ax)) )
+                    + 1i*2*pi*freqf*sigLam* (dx(ay)-dy(ax)) * (dx(Ay)-dy(Ax)) )
         -int2d(Th)( sig * [ax,ay]' * [E0x,E0y] )
         +on(CoilTerminalIn,CoilTerminalOut, Ax=0,Ay=0)
         +on(AirInBot,AirOutBot,AirInLeft,AirOutLeft, Ax=0,Ay=0)
