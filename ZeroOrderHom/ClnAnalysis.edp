@@ -1,5 +1,5 @@
 load "UMFPACK64"
-include "HomogenizedGeometry.idp"
+include "../HomogenizedGeometry.idp"
 
 int coil=Th( (PosCoilIn+PosCoilOut)/2,PosCoilIn/4).region;
 int lamin=Th( PosCoilIn/2,PosCoilIn/2).region;  

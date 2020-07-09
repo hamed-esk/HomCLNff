@@ -18,7 +18,7 @@ real InsRatio = 0.9;
 func co = 1.0*(region==coil);
 func yo = 1.0*(region==lamin);
 func ar = 1.0*(region==airIn)+1.0*(region==airOut)+1.0*(region==coil);
-func sig=4e7*co+0.1*ar+0.1*yo; //
+func sig=4e7*co+0.1*ar; //
 func sigLam=1e6*(1e-3)^2/12*yo;
 func nu=nu0*ar + nu1/InsRatio*yo;
 
@@ -41,7 +41,7 @@ Eh [E0x,E0y] = Grad(u);
 Ph Tz,tz;
 solve rhs4(Tz, tz, solver=CG)
 	=int2d(Th)( [dy(tz),-dx(tz)]' * [dy(Tz),-dx(Tz)])
-	-int2d(Th)( sig * [dy(tz),-dx(tz)]' * [E0x, E0y] )
+	-int2d(Th)( 4e7 * co * [dy(tz),-dx(tz)]' * [E0x, E0y] )
 	+on(AirOutTop,AirOutRight,Tz=0);
 
 real freqf;
@@ -55,22 +55,29 @@ fespace Xh(Th,[RT0Ortho,RT0Ortho]);
 Xh<complex> [A0x,A0y,A2x,A2y];
 Xh<complex> [a0x,a0y,a2x,a2y];
 
-freqf=10000;
-solve fana([A0x,A0y,A2x,A2y],[a0x,a0y,a2x,a2y], tgv=1e30, solver=UMFPACK)
-        =int2d(Th) (nu*Curl(A0x,A0y) * Curl(a0x,a0y)
-                +0.2*nu * Curl(A2x,A2y) * Curl(a2x,a2y)
-                +1i*2*pi*freqf* sig * [A0x,A0y]' * [a0x,a0y]
-                +1i*2*pi*freqf* 1/12 * sigLam * Curl(A0x,A0y) * Curl(a0x,a0y)
-                -1i*2*pi*freqf* 1/60 * sigLam * Curl(A0x,A0y) * Curl(a2x,a2y)
-                -1i*2*pi*freqf* 1/60 * sigLam * Curl(A2x,A2y) * Curl(a0x,a0y)
-                +1i*2*pi*freqf* 1/210* sigLam * Curl(A2x,A2y) * Curl(a2x,a2y)
-                )
-        -int2d(Th) ( (dy(a0y)-dx(a0y)) * Tz )
-        +on(CoilTerminalIn,CoilTerminalOut, A0x=0,A0y=0,A2x=0,A2y=0)
-        +on(AirInBot,AirOutBot,AirInLeft,AirOutLeft, A0x=0,A0y=0,A2x=0,A2y=0)
-        +on(LaminLeft,LaminBot, A0x=0,A0y=0,A2x=0,A2y=0)
-;
-
+for(mmm=0;mmm<=50;mmm=mmm+1){
+    freqf=10^(-1+mmm*7/50); //sweepting 1e-1 to 1e6 with logaritmic spacing
+    solve fana([A0x,A0y,A2x,A2y],[a0x,a0y,a2x,a2y], tgv=1e30, solver=UMFPACK)
+            =int2d(Th) (nu*Curl(A0x,A0y) * Curl(a0x,a0y)
+                    +0.2*nu * Curl(A2x,A2y) * Curl(a2x,a2y)
+                    +1i*2*pi*freqf* sig * [A0x,A0y]' * [a0x,a0y]
+                    +1i*2*pi*freqf* 1/12 * sigLam * Curl(A0x,A0y) * Curl(a0x,a0y)
+                    -1i*2*pi*freqf* 1/60 * sigLam * Curl(A0x,A0y) * Curl(a2x,a2y)
+                    -1i*2*pi*freqf* 1/60 * sigLam * Curl(A2x,A2y) * Curl(a0x,a0y)
+                    +1i*2*pi*freqf* 1/210* sigLam * Curl(A2x,A2y) * Curl(a2x,a2y)
+                    )
+            -int2d(Th) ( (dy(a0y)-dx(a0y)) * Tz )
+            +on(CoilTerminalIn,CoilTerminalOut, A0x=0,A0y=0,A2x=0,A2y=0)
+            +on(AirInBot,AirOutBot,AirInLeft,AirOutLeft, A0x=0,A0y=0,A2x=0,A2y=0)
+            +on(LaminLeft,LaminBot, A0x=0,A0y=0,A2x=0,A2y=0)
+    ;
+    Eh<complex> [Jx,Jy] = sig*( [E0x,E0y] - 1i*2*pi*freqf*[A0x+A2x,A0y+A2y] );
+    complex I = int1d(Th,CoilTerminalIn)(Jy);
+    cout << "freq=" << freqf << endl;
+    cout << "Re(Y)=" << real(I) << endl;
+    cout << "L=Im(1/Y)/w=" << imag(1/I)/(2*pi*freqf) << endl;
+    gg.scientific.showpos << freqf << " " << real(I) << " " << imag(1/I)/(2*pi*freqf) << endl;
+}
 
 system("del graph.pos");
 Eh [reA0x,reA0y] = [sig*real(A0x),sig*real(A0y)];
