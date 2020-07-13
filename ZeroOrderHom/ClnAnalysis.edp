@@ -1,5 +1,7 @@
 load "UMFPACK64"
 include "../HomogenizedGeometry.idp"
+include "../PlotInGMSH.idp"
+system("del graph.pos");
 
 int coil=Th( (PosCoilIn+PosCoilOut)/2,PosCoilIn/4).region;
 int lamin=Th( PosCoilIn/2,PosCoilIn/2).region;  
@@ -63,7 +65,7 @@ Eh [Esx, Esy];
 // RR is the R2n at each step
 // [Esx,Esy] are the components of E2n at each step
 // ------------------------------
-macro Curl(u,v) [dx(v)-dy(u)] //
+macro Curl(u,v) (dx(v)-dy(u)) //
 fespace Xh(Th,[RT0Ortho,P1]); 
 Xh [Ax,Ay,p], [ax,ay,q];
 
@@ -158,6 +160,16 @@ lambda[4] = 1./int2d(Th)( sig * [E4x,E4y]' * [E4x,E4y] + siglam * Curl(E4x,E4y) 
 cout <<"lambda[4] =  "<< lambda[4] << endl; 
 gg.scientific << lambda[4] << endl;
 
+gmshVectorPlot("E2",Th,E2x,E2y);
+Eh [J2x,J2y] = (4e7*co+1e6*yo)*[E2x, E2y];
+gmshVectorPlot("J2",Th,J2x,J2y);
+Ph B1 = dx(A1y)-dy(A1x);
+gmshScalarPlot("CurlA1",Th,B1);
+Ph Bx = dx(Ay)-dy(Ax);
+gmshScalarPlot("CurlA3",Th,Bx);
+gmshVectorPlot("A1",Th,A1x,A1y);
+gmshVectorPlot("Ax",Th,Ax,Ay);
+
 // -------------------------------------
 // solving curl(nu*curl(A5t)) = lambda[4]*sig*E4
 // A5 = A5t + A3
@@ -247,7 +259,7 @@ cout <<"lambda[12] =  "<< lambda[12] << endl;
 gg.scientific << lambda[12] << endl;
 
 
-
+/*
 // -------------------------------------
 // --------PLOTTING THE RESULTS---------
 // -------------------------------------
@@ -290,3 +302,4 @@ gmshVectorPlot("A5",Th,A5x,A5y);
 gmshScalarPlot("B1",Th,B1);
 gmshScalarPlot("B3",Th,B3);
 gmshScalarPlot("B5",Th,B5);
+*/

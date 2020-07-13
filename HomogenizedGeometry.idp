@@ -23,7 +23,7 @@ border AirOutRight(t=0,1){x = 1.2*PosCoilOut; y = 1.2*PosCoilOut*t;}
 border AirOutTop(t=0,1){x = 1.2*PosCoilOut*(1-t); y = 1.2*PosCoilOut;}
 border AirOutLeft(t=0,1){x = 0; y = 1.2*PosCoilOut -0.2*PosCoilOut*t;}
 
-int n=5;
+int n=10;
 int m=5;
 mesh Th = buildmesh(CoilTerminalIn(-n) +CoilTerminalOut(-n) 
     +CoilLeftPart1(-n*5)   +CoilLeftPart2(-n)  +CoilLeftPart3(-n*5)
