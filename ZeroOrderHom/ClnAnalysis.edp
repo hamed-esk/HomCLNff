@@ -165,10 +165,10 @@ Eh [J2x,J2y] = (4e7*co+1e6*yo)*[E2x, E2y];
 gmshVectorPlot("J2",Th,J2x,J2y);
 Ph B1 = dx(A1y)-dy(A1x);
 gmshScalarPlot("CurlA1",Th,B1);
-Ph Bx = dx(Ay)-dy(Ax);
-gmshScalarPlot("CurlA3",Th,Bx);
+Ph B3 = dx(A3y)-dy(A3x);
+gmshScalarPlot("CurlA3",Th,B3);
 gmshVectorPlot("A1",Th,A1x,A1y);
-gmshVectorPlot("Ax",Th,Ax,Ay);
+gmshVectorPlot("A3",Th,A3x,A3y);
 
 // -------------------------------------
 // solving curl(nu*curl(A5t)) = lambda[4]*sig*E4

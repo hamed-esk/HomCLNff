@@ -8,11 +8,11 @@ opts.VariableNames = "e07";
 opts.VariableTypes = "double";
 opts.ExtraColumnsRule = "ignore";
 opts.EmptyLineRule = "read";
-Lamda = readtable("C:\Users\Owner\OneDrive\Research\edp\2dhom\HomogenizedLamda.txt", opts);
+Lamda = readtable([pwd,'\SecondOrderHom\HomogenizedLamda.txt'], opts);
 L = table2array(Lamda);
 
 
-filename = 'C:\Users\Owner\OneDrive\Research\edp\2dhom\HomogenizedFreqAnalysisResults.txt';
+filename = [pwd,'\SecondOrderHom\HomogenizedFreqAnalysisResults.txt'];
 formatSpec = '%13f%14f%f%[^\n\r]';
 fileID = fopen(filename,'r');
 dataArray = textscan(fileID, formatSpec, 'Delimiter', '', 'WhiteSpace', '', 'TextType', 'string',  'ReturnOnError', false);

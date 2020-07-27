@@ -1,0 +1,118 @@
+load "Element_Mixte"
+include "../HomogenizedGeometry.idp"
+include "../PlotInGMSH.idp"
+
+//plot(Th);
+
+int coil=Th( (PosCoilIn+PosCoilOut)/2,PosCoilIn/4).region;
+int lamin=Th( PosCoilIn/2,PosCoilIn/2).region;  
+int airIn=Th( PosCoilIn-RadiusCoil/2,PosCoilIn-RadiusCoil/2).region;
+int airOut=Th( 1.1*PosCoilOut,1.1*PosCoilOut).region;
+
+int numStages = 5;
+real [int] lambda(2*numStages+1);
+real RR;
+real LL;
+real nu0=1e7/4/pi;
+real nu1=1e4/4/pi;
+real InsRatio = 0.9;
+real tgv = 1e30;
+
+func co = 1.0*(region==coil);
+func yo = 1.0*(region==lamin);
+func ar = 1.0*(region==airIn)+1.0*(region==airOut)+1.0*(region==coil);
+func sig=4e7*co;
+func sigLam=1e6*(1e-3)^2*yo;
+func nu=nu0*ar + nu1/InsRatio*yo;
+
+fespace Ph(Th,P2);
+Ph u,v,q0;
+
+fespace Eh(Th,RT1Ortho);
+Eh[int] [E0x,E0y](numStages+1);
+Eh[int] [J0x,J0y](numStages+1);
+Eh [A0sx,A0sy];
+Eh [E0sx,E0sy];
+Eh [cdE0sx,cdE0sy];
+//real[int] Em(Eh.ndof);
+
+real[int] Tb(Ph.ndof);
+
+fespace Xh(Th,[RT1Ortho,P2]);
+Xh[int] [A0x,A0y,p0](numStages);
+real[int] Fm(Xh.ndof);
+
+macro Grad(u) [dx(u), dy(u)] //
+macro Curl(u,v) (dx(v)-dy(u)) //
+macro CurlS(u) [dy(u),-dx(u)] //
+
+// sigma"
+varf vZm([A0x,A0y,p0],[a0x,a0y,pp0])
+    =int2d(Th)( sig * [A0x,A0y]' * [a0x,a0y] +1./12 * sigLam * Curl(A0x,A0y) * Curl(a0x,a0y) );
+matrix Zm = vZm(Eh,Eh,tgv=tgv,solver=CG);
+
+// K"
+varf vKm([A0x,A0y,p0],[a0x,a0y,pp0])
+    =int2d(Th)(nu * Curl(A0x,A0y)' * Curl(a0x,a0y) + Grad(p0)'*[a0x,a0y] + Grad(pp0)'*[A0x,A0y])
+    +on(CoilTerminalIn,CoilTerminalOut, A0x=0,A0y=0,p0=0)
+    +on(AirInBot,AirOutBot,AirInLeft,AirOutLeft, A0x=0,A0y=0,p0=0)
+    +on(LaminLeft,LaminBot, A0x=0,A0y=0,p0=0);
+varf vKb([A0x,A0y,p0],[a0x,a0y,pp0])
+    =int2d(Th)(RR*sig*[E0sx,E0sy]'*[a0x,a0y])
+    +int2d(Th)(1./12*RR*sigLam*Curl(E0sx,E0sy)'*Curl(a0x,a0y) )
+    +on(CoilTerminalIn,CoilTerminalOut, A0x=0,A0y=0,p0=0)
+    +on(AirInBot,AirOutBot,AirInLeft,AirOutLeft, A0x=0,A0y=0,p0=0)
+    +on(LaminLeft,LaminBot, A0x=0,A0y=0,p0=0);
+matrix Km = vKm(Xh,Xh,tgv=tgv,solver=UMFPACK);
+
+// E
+varf vEm(q0,qq0)
+    =int2d(Th) ( (co)*Grad(q0)'*Grad(qq0) )
+    +on(CoilTerminalIn,CoilTerminalOut, q0=0)
+    +on(LaminLeft,LaminBot, q0=0);
+varf vEb(q0,qq0)
+    =int2d(Th)( (co)*[A0sx/LL,A0sy/LL]'*Grad(qq0) )
+    +on(CoilTerminalIn,CoilTerminalOut, q0=0)
+    +on(LaminLeft,LaminBot, q0=0);
+matrix Em = vEm(Ph,Ph,solver=CG,eps=1e-15);
+
+solve Poisson(u,v,solver=CG)
+	=int2d(Th) ( 4e7*co * Grad(u)' * Grad(v))
+	+on(CoilTerminalIn, u=0)
+	+on(CoilTerminalOut, u=1);
+
+[E0x[0],E0y[0]] = [dx(u),dy(u)];
+
+for (int stage=0; stage<numStages; stage++)
+{
+    [E0sx,E0sy] =[E0x[stage],E0y[stage]];
+    lambda[2*stage] = 1./int2d(Th)( sig * [E0sx,E0sy]' * [E0sx,E0sy] + 1./12*sigLam * Curl(E0sx,E0sy) * Curl(E0sx,E0sy) );
+    cout <<"R"<< 2*stage <<" = "<< lambda[2*stage] << endl;
+    RR = lambda[2*stage];
+    Fm = vKb(0,Xh,tgv=tgv);
+    if (stage==0){
+        A0x[stage][] = Km^-1*Fm;
+    }else{
+        A0x[stage][] = Km^-1*Fm;
+        A0x[stage][] = A0x[stage-1][] + A0x[stage][];
+    }
+    lambda[2*stage+1] = A0x[stage][]'*Fm;
+    cout <<"L"<< 2*stage+1 <<" = "<< lambda[2*stage+1] << endl;
+    LL=lambda[2*stage+1];
+    [A0sx,A0sy] = [A0x[stage],A0y[stage]];
+    Tb = vEb(0,Ph);
+    q0[] = Em^-1*Tb;
+    [E0x[stage+1],E0y[stage+1]]=(co+yo)*([E0x[stage],E0y[stage]]-[A0x[stage]/LL,A0y[stage]/LL]+Grad(q0));
+}
+
+/*
+gmshVectorPlot("E0",Th,E0x[0],E0y[0]);
+gmshVectorPlot("E2",Th,E0x[1],E0y[1]);
+gmshVectorPlot("A1",Th,A0x[0],A0y[0]);
+Eh [bx,by] = [A0x[0]/LL,A0y[0]/LL];
+gmshVectorPlot("A1L1",Th,bx,by);
+//gmshVectorPlot("A3",Th,A0x[1],A0y[1]);
+//Ph B1 = Curl(A0x[0],A0y[0]);
+//gmshScalarPlot("B1",Th,B1);
+system("graph.pos");
+*/

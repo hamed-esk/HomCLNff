@@ -1,4 +1,3 @@
-load "UMFPACK64"
 include "../HomogenizedGeometry.idp"
 include "../PlotInGMSH.idp"
 
@@ -9,91 +8,134 @@ int lamin=Th( PosCoilIn/2,PosCoilIn/2).region;
 int airIn=Th( PosCoilIn-RadiusCoil/2,PosCoilIn-RadiusCoil/2).region;
 int airOut=Th( 1.1*PosCoilOut,1.1*PosCoilOut).region;
 
-real tgv = 1e30;
-real [int] lambda(12);
+int numStages = 7;
+real [int] lambda(2*numStages+1);
 real RR;
+real LL;
 real nu0=1e7/4/pi;
 real nu1=1e4/4/pi;
 real InsRatio = 0.9;
+real tgv = 1e30;
 
 func co = 1.0*(region==coil);
 func yo = 1.0*(region==lamin);
 func ar = 1.0*(region==airIn)+1.0*(region==airOut)+1.0*(region==coil);
 func sig=4e7*co;
-func sigLam=1e6*(1e-3)^2/12*yo;
+func sigLam=1e6*(1e-3)^2*yo;
 func nu=nu0*ar + nu1/InsRatio*yo;
+func nu2= nu1/InsRatio/5*yo;
 
-// ------------------------
-// Solving laplacian(u)=0
-// J = -sigma * Grad(u)
-// ------------------------
 fespace Ph(Th,P1);
 Ph u,v;
+
+fespace Eh(Th,[RT0Ortho,RT0Ortho]);
+Eh[int] [E0x,E0y,E2x,E2y](numStages+1);
+Eh[int] [J0x,J0y,J2x,J2y](numStages+1);
+Eh [A0sx,A0sy,A2sx,A2sy];
+Eh [E0sx,E0sy,E2sx,E2sy];
+real[int] Fm(Eh.ndof);
+
+fespace Xh(Th,[RT0Ortho,P1,RT0Ortho,P1]);
+Xh[int] [A0x,A0y,pp0,A2x,A2y,pp2](numStages);
+real[int] FFm(Xh.ndof);
+
+fespace Zh(Th,[P1,P1]);
+Zh [T0,T2];
+Zh [q0,q2];
+real[int] Tb(Zh.ndof);
+
 macro Grad(u) [dx(u), dy(u)] //
 macro Curl(u,v) (dx(v)-dy(u)) //
+macro CurlS(u) [dy(u),-dx(u)] //
 
+// sigma"
+varf vZm([A0x,A0y,A2x,A2y],[a0x,a0y,a2x,a2y])
+    =int2d(Th)( sig * [A0x,A0y]' * [a0x,a0y]
+               +1./12 * sigLam * Curl(A0x,A0y) * Curl(a0x,a0y)
+               -1./60 * sigLam * Curl(A0x,A0y) * Curl(a2x,a2y)
+               -1./60 * sigLam * Curl(A2x,A2y) * Curl(a0x,a0y)
+               +1./210* sigLam * Curl(A2x,A2y) * Curl(a2x,a2y));
+matrix Zm = vZm(Eh,Eh);
+
+// K"
+varf vKm([A0x,A0y,pp0,A2x,A2y,pp2],[a0x,a0y,qq0,a2x,a2y,qq2])
+    =int2d(Th)(nu * Curl(A0x,A0y)' * Curl(a0x,a0y)
+              + Grad(pp0)' * [a0x,a0y] + Grad(qq0)' * [A0x,A0y]
+              +0.2*nu * Curl(A2x,A2y)' * Curl(a2x,a2y)
+              + Grad(pp2)' * [a2x,a2y] + Grad(qq2)' * [A2x,A2y]
+              )
+    +on(CoilTerminalIn,CoilTerminalOut, A0x=0,A0y=0,pp0=0,A2x=0,A2y=0,pp2=0)
+    +on(AirInBot,AirOutBot,AirInLeft,AirOutLeft, A0x=0,A0y=0,pp0=0,A2x=0,A2y=0,pp2=0)
+    +on(LaminLeft,LaminBot, A0x=0,A0y=0,pp0=0,A2x=0,A2y=0,pp2=0);
+varf vKb([A0x,A0y,pp0,A2x,A2y,pp2],[a0x,a0y,qq0,a2x,a2y,qq2])
+    =int2d(Th)(RR * sig * [E0sx,E0sy]'*[a0x,a0y] 
+              +1./12 * RR * sigLam * Curl(E0sx,E0sy)'*Curl(a0x,a0y)
+              -1./60 * RR * sigLam * Curl(E0sx,E0sy)'*Curl(a2x,a2y)
+              -1./60 * RR * sigLam * Curl(E2sx,E2sy)'*Curl(a0x,a0y)
+              +1./210* RR * sigLam * Curl(E2sx,E2sy)'*Curl(a2x,a2y)
+              )
+    +on(CoilTerminalIn,CoilTerminalOut, A0x=0,A0y=0,pp0=0,A2x=0,A2y=0,pp2=0)
+    +on(AirInBot,AirOutBot,AirInLeft,AirOutLeft, A0x=0,A0y=0,pp0=0,A2x=0,A2y=0,pp2=0)
+    +on(LaminLeft,LaminBot, A0x=0,A0y=0,pp0=0,A2x=0,A2y=0,pp2=0);
+matrix Km = vKm(Xh,Xh,tgv=tgv,solver=UMFPACK);
+
+// E
+varf vEm([q0,q2],[qq0,qq2])
+    =int2d(Th) ( (sig)*Grad(q0)'*Grad(qq0) + (sig)*Grad(q2)'*Grad(qq2) )
+    +on(CoilTerminalIn,CoilTerminalOut, q0=0, q2=0)
+    +on(LaminLeft,LaminBot, q0=0, q2=0);
+varf vEb([q0,q2],[qq0,qq2])
+    =int2d(Th)( (sig)*[A0sx/LL,A0sy/LL]'*Grad(qq0) + (sig)*[A2sx/LL,A2sy/LL]'*Grad(qq2) )
+    +on(CoilTerminalIn,CoilTerminalOut, q0=0, q2=0)
+    +on(LaminLeft,LaminBot, q0=0, q2=0);
+matrix Em = vEm(Zh,Zh,tgv=tgv,solver=CG);
+
+//step 1-1
 solve Poisson(u,v,solver=CG)
 	=int2d(Th) ( 4e7*co * Grad(u)' * Grad(v))
 	+on(CoilTerminalIn, u=0)
 	+on(CoilTerminalOut, u=1);
 
-fespace Eh(Th,RT0Ortho);
-Eh [E0x,E0y] = Grad(u);
+//step 1-2
+[E0x[0],E0y[0],E2x[0],E2y[0]] = [dx(u),dy(u),0,0];
 
+system("del HomogenizedLamda.txt");
+ofstream gg("HomogenizedLamda.txt",append);
 
-Eh [Esx,Esy];
-Ph Tz,tz;
-varf vRm(Tz,tz)
-	=int2d(Th)( [dy(tz),-dx(tz)]' * [dy(Tz),-dx(Tz)])
-	+on(AirOutTop,AirOutRight,Tz=0);
-varf vBm(Tz,tz)
-    =int2d(Th)( sig * [dy(tz),-dx(tz)]' * [Esx, Esy] )
-	+on(AirOutTop,AirOutRight,Tz=0);
+for (int stage=0; stage<numStages; stage++)
+{
+    [E0sx,E0sy,E2sx,E2sy] = [E0x[stage],E0y[stage],E2x[stage],E2y[stage]];
+    Fm=Zm*E0sx[];
+    lambda[2*stage] = 1./(E0sx[]'*Fm);
+    cout <<"R"<< 2*stage <<" = "<< lambda[2*stage] << endl;
+    gg.scientific << lambda[2*stage] << endl;
+    RR = lambda[2*stage];
+    FFm = vKb(0,Xh,tgv=tgv);
+    if (stage==0){
+        A0x[stage][] = Km^-1*FFm;
+    }else{
+        A0x[stage][] = Km^-1*FFm;
+        A0x[stage][] = A0x[stage-1][] + A0x[stage][];
+    }
+    lambda[2*stage+1] = A0x[stage][]'*FFm;
+    cout <<"L"<< 2*stage+1 <<" = "<< lambda[2*stage+1] << endl;
+    gg.scientific << lambda[2*stage+1] << endl;
+    LL=lambda[2*stage+1];
+    [A0sx,A0sy,A2sx,A2sy] = [A0x[stage],A0y[stage],A2x[stage],A2y[stage]];
+    Tb = vEb(0,Zh);
+    q0[] = Em^-1*Tb;
+    [E0x[stage+1],E0y[stage+1],E2x[stage+1],E2y[stage+1]]=(co+yo)*([E0x[stage],E0y[stage],E2x[stage],E2y[stage]]-[A0x[stage]/LL,A0y[stage]/LL,A2x[stage]/LL,A2y[stage]/LL]+[dx(q0),dy(q0),dx(q2),dy(q2)]);
+}
 
+gmshVectorPlot("A1,0",Th,A0x[0],A0y[0]);
+gmshVectorPlot("A1,2",Th,A2x[0],A2y[0]);
 
-varf vKm([A0x,A0y,A2x,A2y],[a0x,a0y,a2x,a2y])
-    =int2d(Th)(nu * Curl(A0x,A0y)' * Curl(a0x,a0y) + 0.2*nu * Curl(A2x,A2y)' * Curl(a2x,a2y))
-    +on(CoilTerminalIn,CoilTerminalOut, A0x=0,A0y=0,A2x=0,A2y=0)
-    +on(AirInBot,AirOutBot,AirInLeft,AirOutLeft, A0x=0,A0y=0,A2x=0,A2y=0)
-    +on(LaminLeft,LaminBot, A0x=0,A0y=0,A2x=0,A2y=0);
-varf vSm([A0x,A0y,A2x,A2y],[a0x,a0y,a2x,a2y])
-    =int2d(Th)( sig * [A0x,A0y]' * [a0x,a0y]
-               +1/12 * sigLam * Curl(A0x,A0y) * Curl(a0x,a0y)
-               -1/60 * sigLam * Curl(A0x,A0y) * Curl(a2x,a2y)
-               -1/60 * sigLam * Curl(A2x,A2y) * Curl(a0x,a0y)
-               +1/210* sigLam * Curl(A2x,A2y) * Curl(a2x,a2y))
-    +on(CoilTerminalIn,CoilTerminalOut, A0x=0,A0y=0,A2x=0,A2y=0)
-    +on(AirInBot,AirOutBot,AirInLeft,AirOutLeft, A0x=0,A0y=0,A2x=0,A2y=0)
-    +on(LaminLeft,LaminBot, A0x=0,A0y=0,A2x=0,A2y=0);
-Ph T0z,T2z;
-varf vFm([A0x,A0y,A2x,A2y],[a0x,a0y,a2x,a2y])
-    =int2d(Th)(RR * Curl(a0x,a0y) * T0z + RR * Curl(a2x,a2y) * T2z)
-    +on(CoilTerminalIn,CoilTerminalOut, A0x=0,A0y=0,A2x=0,A2y=0)
-    +on(AirInBot,AirOutBot,AirInLeft,AirOutLeft, A0x=0,A0y=0,A2x=0,A2y=0)
-    +on(LaminLeft,LaminBot, A0x=0,A0y=0,A2x=0,A2y=0);
+gmshVectorPlot("A3,0",Th,A0x[1],A0y[1]);
+gmshVectorPlot("A3,2",Th,A2x[1],A2y[1]);
 
-fespace Xh(Th,[RT0Ortho,RT0Ortho]);
-Xh [A0x,A0y,A2x,A2y];
-Xh [a0x,a0y,a2x,a2y];
+gmshVectorPlot("E2,0",Th,E0x[1],E0y[1]);
+gmshVectorPlot("E2,2",Th,E2x[1],E2y[1]);
 
-matrix Km = vKm(Xh,Xh,tgv=tgv,solver=CG);
-matrix Sm = vSm(Xh,Xh,tgv=tgv,solver=CG);
-real[int] Fm(Xh.ndof);
-
-matrix Rm = vRm(Ph,Ph,tgv=tgv,solver=CG);
-[Esx,Esy] = [E0x,E0y];
-lambda[0] = 1./int2d(Th)(sig * [E0x,E0y]' * [E0x,E0y]);
-
-real[int] Bm = vBm(0,Ph,tgv=tgv);
-T0z[] = Rm^-1*Bm;
-RR = lambda[0];
-Fm = vFm(0,Xh,tgv=tgv);
-A0x[] = Km^-1*Fm;
-gmshVectorPlot("A0",Th,A0x,A0y);
-gmshVectorPlot("A2",Th,A2x,A2y);
-
-Xh [B0x,B0y,B2x,B2y]; B0x[]=Km*A0x[];
-real chi; chi=A0x[]'*Fm;
-cout << "R0  " << lambda[0] << endl;
-cout << "chi " << chi << endl;
-cout << "mii " << int2d(Th)(nu*Curl(A0x,A0y)*Curl(A0x,A0y)) << endl;
+Ph B = Curl(A0x[0],A0y[0]);
+gmshScalarPlot("B",Th,B);
+system("graph.pos");
